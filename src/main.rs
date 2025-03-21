@@ -70,7 +70,6 @@ fn main() {
                 // {"name": "Rust"}
                 //
 
-                // JSON
                 let mut buffer = [0; 1024];
                 if let Ok(_) = stream.read(&mut buffer) {
                     // How we respond
@@ -80,6 +79,11 @@ fn main() {
                     //    "Content-Type: application/json" (indicates we're sending JSON)
                     //    "Content-Length: {}" (length of the message body)
                     // - Body: {"res": "Hello World"} (the JSON)
+
+                    // TEXT example response
+                    // let response = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!";
+
+                    // JSON example response
                     let response_body = r#"{"res": "Hello World"}"#;
                     let response = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
@@ -97,17 +101,6 @@ fn main() {
                         .flush()
                         .expect("Error flushing response buffer to client");
                 }
-
-                // TEXT
-                // Buffer to read the request
-                // let mut buffer = [0; 1024];
-                // if let Ok(_) = stream.read(&mut buffer) {
-                //     let response = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!";
-                //     stream
-                //         .write_all(response.as_bytes())
-                //         .expect("Error writing to stream");
-                //     stream.flush().expect("Error flushing buffer");
-                // }
             }
             Err(e) => {
                 eprintln!("Error accepting TCP connection: {} ", e)
