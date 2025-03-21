@@ -2,7 +2,7 @@
 
 A progressive exploration of backend development with Rust, demonstrating different approaches to building web servers and APIs.
 
-### 1. Synchronous Implementation
+## 1. Synchronous Implementation
 
 The synchronous version uses Rust's standard library (`std::net::TcpListener`) to create a basic HTTP server. This implementation:
 
@@ -10,8 +10,6 @@ The synchronous version uses Rust's standard library (`std::net::TcpListener`) t
 - Blocks during I/O operations
 - Has limited scalability for handling concurrent connections
 - Handles HTTP parsing and response formatting manually
-
-## Getting Started
 
 ### Running the Server
 
