@@ -43,3 +43,23 @@ The asynchronous version uses Tokio library to create a non-blocking HTTP server
 - Scales efficiently to handle thousands of concurrent connections
 - Still handles HTTP parsing and response formatting manually
 - Represents a more production-ready approach
+
+### Running the Server
+
+```bash
+cargo run
+```
+
+### Testing the Server
+
+Once running, you can test the server using curl:
+
+```bash
+curl http://localhost:3000
+```
+
+Expected response:
+
+```json
+{ "res": "Hello World" }
+```

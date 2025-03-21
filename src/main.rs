@@ -15,18 +15,18 @@ use tokio::{
 // accepting new connections without waiting for previous clients to complete.
 
 #[tokio::main] // Tokio runtime
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // STARTING SERVER
 
     // Assign port
     let port: u16 = 3_000;
     let listener = TcpListener::bind(format!("127.0.0.1:{}", port))
         .await
-        .expect(&format!("Error binding to TCP port {}", port));
+        .map_err(|e| format!("Error binding to TCP port {}: {}", port, e))?;
 
     // When port is :0, the OS assigns port automatically
-    //let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    //let port = listener.local_addr().unwrap().port();
+    //let listener = TcpListener::bind("127.0.0.1:0").await?;
+    //let port = listener.local_addr()?.port();
 
     println!("Server initialized on port {}", port);
 
@@ -37,7 +37,7 @@ async fn main() {
         let (mut stream, _) = listener
             .accept()
             .await
-            .expect("Failed to accept connection");
+            .map_err(|e| format!("Failed to accept connection: {}", e))?;
 
         // Each new connection is handled in its own asynchronous task,
         // allowing the server to continue accepting new connections
@@ -74,46 +74,65 @@ async fn main() {
             let mut buffer = [0; 1024];
 
             // JSON
-            if let Ok(_) = stream.read(&mut buffer).await {
-                // How we respond
-                // After reading the request (buffer), we build the HTTP response with:
-                // - Status line: "HTTP/1.1 200 OK"
-                // - Headers:
-                //    "Content-Type: application/json" (indicates we're sending JSON)
-                //    "Content-Length: {}" (length of the message body)
-                // - Body: {"res": "Hello World"} (the JSON)
-                let response_body = r#"{"res": "Hello World"}"#;
-                let response = format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                    response_body.len(),
-                    response_body
-                );
+            match stream.read(&mut buffer).await {
+                // Client closed connection (0 bytes read)
+                Ok(0) => {
+                    println!("Client closed connection before sending data");
+                    return;
+                }
 
-                // Write response asynchronously
-                // Finally, we send the response to the client asynchronously:
-                // write_all().await writes the bytes to the TcpStream without blocking.
-                // flush().await ensures the data is sent immediately without blocking.
-                stream
-                    .write_all(response.as_bytes())
-                    .await
-                    .expect("Error writing HTTP response to client");
-                stream
-                    .flush()
-                    .await
-                    .expect("Error flushing response buffer to client");
+                // Successfully read n bytes
+                Ok(_n) => {
+                    // How we respond
+                    // After reading the request (buffer), we build the HTTP response with:
+                    // - Status line: "HTTP/1.1 200 OK"
+                    // - Headers:
+                    //    "Content-Type: application/json" (indicates we're sending JSON)
+                    //    "Content-Length: {}" (length of the message body)
+                    // - Body: {"res": "Hello World"} (the JSON)
+                    let response_body = r#"{"res": "Hello World"}"#;
+                    let response = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                        response_body.len(),
+                        response_body
+                    );
+
+                    // Write response asynchronously
+                    // Finally, we send the response to the client asynchronously:
+                    // write_all().await writes the bytes to the TcpStream without blocking.
+                    // flush().await ensures the data is sent immediately without blocking.
+                    if let Err(e) = stream.write_all(response.as_bytes()).await {
+                        eprintln!("Error writing HTTP response to client: {}", e);
+                        return;
+                    }
+
+                    if let Err(e) = stream.flush().await {
+                        eprintln!("Error flushing response buffer to client: {}", e);
+                    }
+                }
+
+                // Error handling for read failures
+                Err(e) => {
+                    eprintln!("Error reading data from client: {}", e);
+                }
             }
 
-            // TEXT
-            // if let Ok(_) = stream.read(&mut buffer).await {
-            //     let response = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!";
-            //     stream
-            //         .write_all(response.as_bytes())
-            //         .await
-            //         .expect("Error writing HTTP response to client");
-            //     stream
-            //         .flush()
-            //         .await
-            //         .expect("Error flushing response buffer to client");
+            // TEXT response example
+            // match stream.read(&mut buffer).await {
+            //     Ok(0) => return,
+            //     Ok(_) => {
+            //         let response = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!";
+            //         if let Err(e) = stream.write_all(response.as_bytes()).await {
+            //             eprintln!("Error writing HTTP response to client: {}", e);
+            //             return;
+            //         }
+            //         if let Err(e) = stream.flush().await {
+            //             eprintln!("Error flushing response buffer to client: {}", e);
+            //         }
+            //     },
+            //     Err(e) => {
+            //         eprintln!("Error reading data from client: {}", e);
+            //     }
             // }
         });
     }
