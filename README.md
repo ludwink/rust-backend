@@ -32,3 +32,14 @@ Expected response:
 ```json
 { "res": "Hello World" }
 ```
+
+## 2. Asynchronous Implementation with Tokio
+
+The asynchronous version uses Tokio library to create a non-blocking HTTP server. This implementation:
+
+- Handles multiple connections concurrently
+- Uses non-blocking I/O operations
+- Spawns lightweight tasks instead of threads
+- Scales efficiently to handle thousands of concurrent connections
+- Still handles HTTP parsing and response formatting manually
+- Represents a more production-ready approach
