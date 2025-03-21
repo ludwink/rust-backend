@@ -73,7 +73,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Buffer to read the request
             let mut buffer = [0; 1024];
 
-            // JSON
             match stream.read(&mut buffer).await {
                 // Client closed connection (0 bytes read)
                 Ok(0) => {
@@ -90,6 +89,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     //    "Content-Type: application/json" (indicates we're sending JSON)
                     //    "Content-Length: {}" (length of the message body)
                     // - Body: {"res": "Hello World"} (the JSON)
+
+                    // TEXT example response
+                    // let response = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!";
+
+                    // JSON example response
                     let response_body = r#"{"res": "Hello World"}"#;
                     let response = format!(
                         "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
@@ -116,24 +120,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("Error reading data from client: {}", e);
                 }
             }
-
-            // TEXT response example
-            // match stream.read(&mut buffer).await {
-            //     Ok(0) => return,
-            //     Ok(_) => {
-            //         let response = "HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!";
-            //         if let Err(e) = stream.write_all(response.as_bytes()).await {
-            //             eprintln!("Error writing HTTP response to client: {}", e);
-            //             return;
-            //         }
-            //         if let Err(e) = stream.flush().await {
-            //             eprintln!("Error flushing response buffer to client: {}", e);
-            //         }
-            //     },
-            //     Err(e) => {
-            //         eprintln!("Error reading data from client: {}", e);
-            //     }
-            // }
         });
     }
 }
