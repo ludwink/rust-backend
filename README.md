@@ -99,3 +99,23 @@ curl -X POST http://localhost:3000/users -H "Content-Type: application/json" -d 
 # Get all products
 curl http://localhost:3000/products
 ```
+
+## 4. Hyper Framework Implementation
+
+This implementation replaces manual routing with the Hyper framework, improving features as follows:
+
+- Integration with Tokio for efficient asynchronous operations
+- A structured, type-safe routing system provided by Hyper
+- Enhanced handling of HTTP requests and responses
+- Optimized processing of request headers and bodies
+- Better performance with less custom code to maintain
+
+### Running the Server
+
+```shell
+cargo run
+```
+
+### Testing the Server
+
+Once running, you can test the different endpoints in the same way as in the previous versions.

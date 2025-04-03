@@ -1,204 +1,184 @@
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
+use std::{convert::Infallible, vec};
+
+use http_body_util::BodyExt;
+use hyper::{
+    Method, Request, Response, StatusCode,
+    body::{Buf, Incoming},
+    header::CONTENT_TYPE,
 };
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
-// CONSTANTS FOR HTTP RESPONSE
-const HTTP_OK: &str = "HTTP/1.1 200 OK\r\n";
-const HTTP_NOT_FOUND: &str = "HTTP/1.1 404 Not Found\r\n";
-const HTTP_INTERNAL_ERROR: &str = "HTTP/1.1 500 Internal Server Error\r\n";
-const CONTENT_TYPE_JSON: &str = "Content-Type: application/json\r\n";
-const CONTENT_LENGTH: &str = "Content-Length: ";
+/// Processes incoming HTTP requests and routes them to the appropriate handler.
+///
+/// This function serves as the main router for the HTTP server, examining the request
+/// method and path to determine which handler should process the request.
+///
+/// # Arguments
+///
+/// * `req` - The incoming HTTP request to be processed
+///
+/// # Returns
+///
+/// A `Result` containing the HTTP response or an `Infallible` error type
+/// (which means the function will never return an error).
+///
+/// # Implemented Routes
+///
+/// - `GET /`: Basic greeting message
+/// - `GET /users`: List all users (currently returns empty list)
+/// - `POST /users`: Create a new user with JSON data
+/// - `GET /users/{id}`: Get information for a specific user
+/// - `GET /products`: Get all products (currently returns a mock error)
+///
+/// # Examples
+///
+/// All routes return JSON responses except for the root path.
+pub async fn process_request_and_response(
+    req: Request<Incoming>,
+) -> Result<Response<String>, Infallible> {
+    let res = match (req.method(), req.uri().path()) {
+        (&Method::GET, "/") => Response::new("Hello World".to_owned()),
+        (&Method::GET, "/users") => handle_get_all_users().await,
+        (&Method::POST, "/users") => handle_create_user(req).await,
+        (&Method::GET, path) if path.starts_with("/users/") => handle_get_user(req).await,
+        (&Method::GET, "/products") => handle_get_all_products().await,
+        _ => json_response(StatusCode::NOT_FOUND, json!({"message": "Not found"})),
+    };
 
-// PROCESS REQUEST AND RESPONSE
-pub async fn process_request_response(
-    mut stream: TcpStream,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // Create a buffer using Vec<u8> instead of a fixed-size array
-    // Initial capacity of 10KB, but can grow if needed
-    let mut buffer = vec![0; 10240];
-
-    // Asynchronously read the HTTP request from client
-    match stream.read(&mut buffer).await {
-        // Case 1: Client closed connection (0 bytes read)
-        Ok(0) => {
-            println!("Client closed connection before sending data");
-            return Ok(());
-        }
-
-        // Case 2: Successfully read n bytes
-        Ok(n) => {
-            // Convert received bytes to a UTF-8 string for processing
-            // Only convert the bytes that were actually read [0..n]
-            let request = String::from_utf8_lossy(&buffer[0..n]).to_string();
-
-            // Process the request and determine the appropriate response
-            // - status_line: e.g., "HTTP/1.1 200 OK"
-            // - content_type: e.g., "Content-Type: application/json"
-            // - body: the response content (JSON, HTML, etc.)
-            let (status_line, content_type, body) = process_route(&request).await;
-
-            // Construct the complete HTTP response
-            // 1. Status line (e.g., "HTTP/1.1 200 OK")
-            // 2. Headers (Content-Type, Content-Length)
-            // 3. Blank line (\r\n\r\n) separating headers from body
-            // 4. Response body
-            let response = format!(
-                "{}{}{}{}\r\n\r\n{}",
-                status_line,
-                content_type,
-                CONTENT_LENGTH,
-                body.len(),
-                body
-            );
-
-            // Write response asynchronously
-            // Send the response bytes to the client without blocking
-            stream.write_all(response.as_bytes()).await?;
-            // Ensure all data is immediately sent without blocking
-            stream.flush().await?;
-        }
-
-        // Case 3: Error during read operation
-        Err(e) => {
-            eprintln!("Error reading data from client: {}", e);
-            return Err(Box::new(e));
-        }
-    }
-
-    Ok(())
+    Ok(res)
 }
 
-// PROCESS ROUTES
-// This function parses incoming HTTP requests and
-// directs them to the appropriate handler based on method and path
-//
-// Example of a raw HTTP request as received in the buffer converted to String:
-// ```
-// POST /users HTTP/1.1
-// Content-Type: application/json
-// User-Agent: PostmanRuntime/7.43.2
-// Accept: */*
-// Postman-Token: 4c1ebe5c-248f-463e-b980-732f64f49c40
-// Host: localhost:3000
-// Accept-Encoding: gzip, deflate, br
-// Connection: keep-alive
-// Content-Length: 48
-//
-// {
-//     "name": "Parker",
-//     "status": true
-// }
-// ```
-//
-// The parsing process:
-// 1. Extract the first line (e.g., "POST /users HTTP/1.1")
-// 2. Split this line into parts: ["POST", "/users", "HTTP/1.1"]
-// 3. Use the method (parts[0]) and path (parts[1]) to route the request
-//
-// For POST requests with a body:
-// - The HTTP headers and body are separated by a blank line (\r\n\r\n)
-// - The body contains the payload (e.g., JSON data)
-// - Function `extract_body_from_request` is used to extract this content
-//
-async fn process_route(request: &str) -> (&'static str, &'static str, String) {
-    // Extract the first line of the request (e.g., "POST /users HTTP/1.1")
-    let request_line = request.lines().next().unwrap_or("");
+// ==================== UTILITY FUNCTIONS ====================
 
-    // Split the request line into parts
-    // Example: for "POST / HTTP/1.1" -> parts = ["POST", "/", "HTTP/1.1"]
-    let parts: Vec<&str> = request_line.split_whitespace().collect();
+/// Creates a JSON HTTP response with the specified status code and body.
+///
+/// # Arguments
+///
+/// * `status` - The HTTP status code for the response
+/// * `body` - The data to be serialized as JSON in the response body
+///
+/// # Returns
+///
+/// A fully formed HTTP response with the specified status and JSON body
+///
+/// # Panics
+///
+/// Will panic if:
+/// - The body cannot be serialized to JSON
+/// - The response cannot be built
+fn json_response<T: Serialize>(status: StatusCode, body: T) -> Response<String> {
+    Response::builder()
+        .status(status)
+        .header(CONTENT_TYPE, "application/json")
+        .body(serde_json::to_string(&body).unwrap())
+        .unwrap()
+}
 
-    // Return an error if the request doesn't contain at least a method and path
-    if parts.len() < 2 {
-        return (
-            HTTP_NOT_FOUND,
-            CONTENT_TYPE_JSON,
-            r#"{"error": "Invalid request"}"#.to_string(),
-        );
-    }
+// ==================== USER ROUTES ====================
+#[derive(Serialize, Deserialize)]
+struct User {
+    name: String,
+    age: u8,
+}
 
-    // Extract the HTTP method (e.g., "GET", "POST")
-    // and the requested path (e.g., "/users")
-    let method = parts[0];
-    let path = parts[1];
+/// Handles GET requests to retrieve all users.
+///
+/// # Route
+///
+/// `GET /users`
+///
+/// # Response
+///
+/// Returns a 200 OK response with an empty array of users.
+async fn handle_get_all_users() -> Response<String> {
+    let users: Vec<User> = vec![];
 
-    // Route the request based on the method and path combination
-    match (method, path) {
-        // Main route - responds with a simple Hello World message
-        ("GET", "/") => {
-            let body = r#"{"message": "Hello World!"}"#.to_string();
-            (HTTP_OK, CONTENT_TYPE_JSON, body)
+    json_response(StatusCode::OK, users)
+}
+
+/// Handles GET requests to retrieve a specific user by ID.
+///
+/// # Route
+///
+/// `GET /users/{id}` where `{id}` must be a positive integer (u32)
+///
+/// # Response
+///
+/// - 200 OK with user data if the ID is valid
+/// - 400 Bad Request if the ID is not a valid u32
+async fn handle_get_user(req: Request<Incoming>) -> Response<String> {
+    // Extract and validate the ID from the URL
+    let last_segment = req.uri().path().split("/").last().unwrap_or("default");
+    let _id: u32 = match last_segment.parse::<u32>() {
+        Ok(id) => id,
+        Err(_) => {
+            return json_response(StatusCode::BAD_REQUEST, json!({"error": "ID must be u32"}));
         }
+    };
 
-        // USERS ROUTES
-        // GET /users - Retrieve all users
-        ("GET", "/users") => handle_get_all_users().await,
-        // GET /users/{id} - Retrieve a specific user by ID
-        // Example: "/users/123" would extract "123" as the ID
-        ("GET", path) if path.starts_with("/users/") => {
-            // trim_start_matches remove all occurrences of "/users/" at the beginning
-            // let id = path.trim_start_matches("/users/");
+    // Example response with mock data
+    let user = User {
+        name: "User A".to_owned(),
+        age: 25,
+    };
 
-            // strip_prefix removes only the first occurrence of "/users/" and leaves the rest intact
-            // For "/users/123", this would extract "123" as the ID
-            let id = path.strip_prefix("/users/").unwrap_or("");
+    json_response(StatusCode::OK, user)
+}
 
-            handle_get_user(id).await
+/// Handles POST requests to create a new user.
+///
+/// # Route
+///
+/// `POST /users`
+///
+/// # Request Body
+/// Any valid JSON data
+///
+/// # Response
+///
+/// - 200 OK with the parsed JSON if valid
+/// - 400 Bad Request if the JSON is malformed or body collection fails
+async fn handle_create_user(req: Request<Incoming>) -> Response<String> {
+    // whole_body is basically a buffer containing all the data from the request body.
+    // Collect all fragments of the request body into a single buffer
+    // The HTTP body may arrive in multiple parts that need to be aggregated
+    let whole_body = match req.collect().await {
+        // aggregate() combines all the chunks into a single buffer.
+        Ok(collected) => collected.aggregate(),
+        Err(_) => {
+            return json_response(
+                StatusCode::BAD_REQUEST,
+                json!({"error": "Failed to collect the request body"}),
+            );
         }
-        // POST /users - Create a new user
-        // Extracts the JSON body from the request and passes it to the handler
-        // Example body: {"name": "John", "email": "john@example.com"}
-        ("POST", "/users") => {
-            let body = extract_body_from_request(request);
-            handle_create_user(body).await
-        }
+    };
 
-        // PRODUCT ROUTES
-        // GET /products - Retrieve all products
-        ("GET", "/products") => handle_get_all_products().await,
-
-        // 404 Not Found - Route not defined
-        // Returns when no matching route is found
-        _ => (
-            HTTP_NOT_FOUND,
-            CONTENT_TYPE_JSON,
-            r#"{"error": "Route not found"}"#.to_string(),
+    // Attempt to parse the JSON body
+    // chunk() returns a reference to the bytes in the buffer
+    match serde_json::from_slice::<Value>(whole_body.chunk()) {
+        Ok(json) => json_response(StatusCode::OK, json),
+        Err(_) => json_response(
+            StatusCode::BAD_REQUEST,
+            json!({"error": "Invalid user data"}),
         ),
     }
 }
 
-// UTILS. EXTRACT BODY
-// - The HTTP headers and body are separated by a blank line (\r\n\r\n)
-// - The body contains the payload (e.g., JSON data)
-fn extract_body_from_request(request: &str) -> &str {
-    if let Some(body_start) = request.find("\r\n\r\n") {
-        &request[body_start + 4..]
-    } else {
-        ""
-    }
-}
+// ==================== PRODUCT ROUTES ====================
 
-// USERS ROUTES
-async fn handle_get_all_users() -> (&'static str, &'static str, String) {
-    let body = r#"{"users": []}"#.to_string();
-    (HTTP_OK, CONTENT_TYPE_JSON, body)
-}
-
-async fn handle_get_user(id: &str) -> (&'static str, &'static str, String) {
-    let body = format!(
-        r#"{{"id": "{}", "name": "User Name", "email": "user@example.com"}}"#,
-        id
-    );
-    (HTTP_OK, CONTENT_TYPE_JSON, body)
-}
-
-async fn handle_create_user(body: &str) -> (&'static str, &'static str, String) {
-    (HTTP_OK, CONTENT_TYPE_JSON, body.to_string())
-}
-
-// PRODUCTS ROUTES
-async fn handle_get_all_products() -> (&'static str, &'static str, String) {
-    let body = r#"{"error": "Internal Server Error"}"#.to_string();
-    (HTTP_INTERNAL_ERROR, CONTENT_TYPE_JSON, body)
+/// Handles GET requests to retrieve all products.
+///
+/// # Route
+///
+/// `GET /products`
+///
+/// # Response
+///
+/// Currently returns a 500 Internal Server Error response as a placeholder.
+async fn handle_get_all_products() -> Response<String> {
+    json_response(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        json!({"error": "Internal Server Error"}),
+    )
 }
