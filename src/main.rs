@@ -22,14 +22,19 @@
 //!
 //! See the `router` module for detailed endpoint documentation.
 
-mod router;
+use std::env;
 
+use dotenvy::dotenv;
 use tokio::net::TcpListener;
 
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::TokioIo;
 
+mod db;
+mod router;
+
+use db::init_pool;
 use router::process_request_and_response;
 
 /// Main entry point of the application.
@@ -47,12 +52,25 @@ use router::process_request_and_response;
 async fn main() {
     // ==================== STARTING SERVER ====================
 
+    // Load .env file
+    // .ok() ignore any errors if the file does not exist
+    dotenv().expect(".env can't load");
+
+    // Start database pool
+    if let Err(e) = init_pool().await {
+        eprintln!("Error starting database pool: {}", e);
+        std::process::exit(1);
+    }
+
     // Configure IP address and port for the server
     // - 0.0.0.0: Listen on all available network interfaces
     //   (allows both local and external connections)
     // - 127.0.0.1: Listen only for local connections
     // - When port is :0, the OS assigns port automatically
-    let port: u16 = 3_000;
+    let port: u16 = env::var("PORT")
+        .unwrap_or("3000".to_owned())
+        .parse::<u16>()
+        .unwrap();
     //let addr = SocketAddr::from(([0, 0, 0, 0], 3005));
     let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
         .await

@@ -119,3 +119,14 @@ cargo run
 ### Testing the Server
 
 Once running, you can test the different endpoints in the same way as in the previous versions.
+
+## 5. Database Integration with bb8 and tokio-postgres for Asynchronous Connections
+
+This implementation introduces asynchronous database connectivity using bb8 (a connection pool) and tokio-postgres (for non-blocking PostgreSQL operations). This allows the server to efficiently handle multiple database connections concurrently without blocking the main thread, improving scalability and performance.
+
+Key features of this implementation:
+
+- Uses bb8 for managing the connection pool.
+- Uses tokio-postgres for asynchronous database operations (e.g., SELECT, INSERT).
+- Maintains the asynchronous architecture with Tokio.
+- Handles concurrent database connections efficiently, optimizing performance.

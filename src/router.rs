@@ -1,4 +1,4 @@
-use std::{convert::Infallible, vec};
+use std::convert::Infallible;
 
 use http_body_util::BodyExt;
 use hyper::{
@@ -7,7 +7,9 @@ use hyper::{
     header::CONTENT_TYPE,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::json;
+
+use crate::db::get_connection;
 
 /// Processes incoming HTTP requests and routes them to the appropriate handler.
 ///
@@ -40,8 +42,8 @@ pub async fn process_request_and_response(
     let res = match (req.method(), req.uri().path()) {
         (&Method::GET, "/") => Response::new("Hello World".to_owned()),
         (&Method::GET, "/users") => handle_get_all_users().await,
-        (&Method::POST, "/users") => handle_create_user(req).await,
         (&Method::GET, path) if path.starts_with("/users/") => handle_get_user(req).await,
+        (&Method::POST, "/users") => handle_create_user(req).await,
         (&Method::GET, "/products") => handle_get_all_products().await,
         _ => json_response(StatusCode::NOT_FOUND, json!({"message": "Not found"})),
     };
@@ -79,7 +81,7 @@ fn json_response<T: Serialize>(status: StatusCode, body: T) -> Response<String> 
 #[derive(Serialize, Deserialize)]
 struct User {
     name: String,
-    age: u8,
+    age: i32,
 }
 
 /// Handles GET requests to retrieve all users.
@@ -92,7 +94,17 @@ struct User {
 ///
 /// Returns a 200 OK response with an empty array of users.
 async fn handle_get_all_users() -> Response<String> {
-    let users: Vec<User> = vec![];
+    let mut users: Vec<User> = Vec::new(); //vec![];
+
+    let conn = get_connection().await.unwrap();
+    let rows = conn.query("SELECT * FROM users", &[]).await.unwrap();
+
+    for row in rows {
+        users.push(User {
+            name: row.get("name"),
+            age: row.get("age"),
+        });
+    }
 
     json_response(StatusCode::OK, users)
 }
@@ -110,17 +122,26 @@ async fn handle_get_all_users() -> Response<String> {
 async fn handle_get_user(req: Request<Incoming>) -> Response<String> {
     // Extract and validate the ID from the URL
     let last_segment = req.uri().path().split("/").last().unwrap_or("default");
-    let _id: u32 = match last_segment.parse::<u32>() {
+    let id: i32 = match last_segment.parse::<i32>() {
         Ok(id) => id,
         Err(_) => {
             return json_response(StatusCode::BAD_REQUEST, json!({"error": "ID must be u32"}));
         }
     };
 
-    // Example response with mock data
+    let conn = get_connection().await.unwrap();
+    let data = conn
+        .query("SELECT * FROM users WHERE id = $1", &[&id])
+        .await
+        .unwrap();
+
+    if data.is_empty() {
+        return json_response(StatusCode::NOT_FOUND, json!({"message": "User not found"}));
+    }
+
     let user = User {
-        name: "User A".to_owned(),
-        age: 25,
+        name: data[0].get(1),
+        age: data[0].get(2),
     };
 
     json_response(StatusCode::OK, user)
@@ -156,11 +177,29 @@ async fn handle_create_user(req: Request<Incoming>) -> Response<String> {
 
     // Attempt to parse the JSON body
     // chunk() returns a reference to the bytes in the buffer
-    match serde_json::from_slice::<Value>(whole_body.chunk()) {
-        Ok(json) => json_response(StatusCode::OK, json),
-        Err(_) => json_response(
-            StatusCode::BAD_REQUEST,
-            json!({"error": "Invalid user data"}),
+    let data = match serde_json::from_slice::<User>(whole_body.chunk()) {
+        Ok(json) => json,
+        Err(_) => {
+            return json_response(
+                StatusCode::BAD_REQUEST,
+                json!({"error": "Invalid user data"}),
+            );
+        }
+    };
+
+    let conn = get_connection().await.unwrap();
+    let result = conn
+        .query(
+            "INSERT INTO users (name, age) VALUES ($1, $2)",
+            &[&data.name, &data.age],
+        )
+        .await;
+
+    match result {
+        Ok(_) => json_response(StatusCode::OK, json!({"message": "User added"})),
+        Err(e) => json_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({"error": format!("ERROR: {}", e)}),
         ),
     }
 }
