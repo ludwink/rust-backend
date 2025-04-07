@@ -53,8 +53,8 @@ async fn main() {
     // ==================== STARTING SERVER ====================
 
     // Load .env file
-    // .ok() ignore any errors if the file does not exist
-    dotenv().expect(".env can't load");
+    // .ok() ignore any errors if the file does not exist (production)
+    dotenv().ok();
 
     // Start database pool
     if let Err(e) = init_pool().await {

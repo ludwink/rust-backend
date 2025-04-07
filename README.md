@@ -50,16 +50,10 @@ cargo run
 
 ### Testing the Server
 
-Once running, you can test the server using curl:
+You can test the server using curl:
 
 ```bash
 curl http://localhost:3000
-```
-
-Expected response:
-
-```json
-{ "res": "Hello World" }
 ```
 
 ## 3. Manual Routing Implementation
@@ -71,7 +65,6 @@ This implementation builds upon the asynchronous Tokio version by adding a struc
 - Path parameter extraction (e.g., extracting IDs from paths like `/users/123`)
 - JSON request and response handling
 - Organized code structure with separate handler functions for different endpoints
-- Still uses manual HTTP parsing but with more sophisticated request processing
 
 ### Running the Server
 
@@ -118,7 +111,7 @@ cargo run
 
 ### Testing the Server
 
-Once running, you can test the different endpoints in the same way as in the previous versions.
+You can test the different endpoints in the same way as in the previous versions.
 
 ## 5. Database Integration with bb8 and tokio-postgres for Asynchronous Connections
 
@@ -126,7 +119,45 @@ This implementation introduces asynchronous database connectivity using bb8 (a c
 
 Key features of this implementation:
 
-- Uses bb8 for managing the connection pool.
-- Uses tokio-postgres for asynchronous database operations (e.g., SELECT, INSERT).
-- Maintains the asynchronous architecture with Tokio.
-- Handles concurrent database connections efficiently, optimizing performance.
+- Uses bb8 for managing the connection pool
+- Uses tokio-postgres for asynchronous database operations (e.g., SELECT, INSERT)
+- Maintains the asynchronous architecture with Tokio
+- Handles concurrent database connections efficiently, optimizing performance
+
+## 6. Docker Containerization
+
+This implementation adds Docker support, allowing the application to run in containers for easier distribution and deployment. Benefits of this approach:
+
+- Isolated and reproducible environment for the application
+- Easy dependency management
+- Better portability across development, testing, and production environments
+- Simple integration with CI/CD systems
+
+### Building and Running with Docker
+
+```shell
+# Build Docker image
+docker build -t rust-backend .
+
+# Run using environment variables from .env file
+docker run -d --name rust-api -p 3000:3000 --env-file .env rust-backend
+
+# Run with explicitly specified environment variables
+docker run -d --name rust-api -p 3000:3000 -e PORT=3000 -e DB_HOST=host.docker.internal -e DB_PORT=5432 -e DB_NAME=postgres -e DB_USER=postgres -e DB_PASSWORD=123456 rust-backend
+```
+
+### Useful Docker Commands
+
+```shell
+# Stop the container
+docker stop rust-api
+
+# Start the container
+docker start rust-api
+
+# View container logs
+docker logs rust-api
+
+# Remove the container
+docker rm -f rust-api
+```
