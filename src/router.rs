@@ -102,6 +102,13 @@ pub async fn process_request_response(
 // - Function `extract_body_from_request` is used to extract this content
 //
 async fn process_route(request: &str) -> (&'static str, &'static str, String) {
+    // Simple example
+    //let (status_line, content) = match &*request {
+    //    r if r.starts_with("POST /users") => handle_create(r),
+    //    r if r.starts_with("GET /users/") => handle_get(r),
+    //    _ => (HTTP_NOT_FOUND.to_string(), "404 Not Found".to_string()),
+    //};
+
     // Extract the first line of the request (e.g., "POST /users HTTP/1.1")
     let request_line = request.lines().next().unwrap_or("");
 
