@@ -133,7 +133,7 @@ This implementation adds Docker support, allowing the application to run in cont
 - Better portability across development, testing, and production environments
 - Simple integration with CI/CD systems
 
-### Building and Running with Docker
+### Dockerfile
 
 ```shell
 # Build Docker image
@@ -146,7 +146,7 @@ docker run -d --name rust-api -p 3000:3000 --env-file .env rust-backend
 docker run -d --name rust-api -p 3000:3000 -e PORT=3000 -e DB_HOST=host.docker.internal -e DB_PORT=5432 -e DB_NAME=postgres -e DB_USER=postgres -e DB_PASSWORD=123456 rust-backend
 ```
 
-### Useful Docker Commands
+Useful Docker Commands
 
 ```shell
 # Stop the container
@@ -160,4 +160,23 @@ docker logs rust-api
 
 # Remove the container
 docker rm -f rust-api
+```
+
+### docker-compose
+
+```shell
+# Start (or build) containers in the background
+docker compose up -d [--build]
+
+# Pause containers
+docker compose pause
+
+# Resume containers
+docker compose unpause
+
+# Stop containers
+docker compose stop
+
+# Remove containers, networks, and volumes
+docker compose down --volumes
 ```

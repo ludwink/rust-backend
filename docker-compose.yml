@@ -1,0 +1,53 @@
+# Every service is an container using an image or a build context (Dockerfile)
+services:
+  # Database service
+  postgres:
+    container_name: postgres
+    image: postgres:17.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    # Uncomment if need to expose the database outside of Docker
+    # ports:
+    #   - "${DB_PORT}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
+  # Backend service
+  backend:
+    build: .
+    container_name: backend
+    image: backend:latest
+    environment:
+      PORT: ${PORT}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${PORT}:${PORT}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  pg_data:
+    name: ${VOLUME_NAME}
+    driver: local
+
+networks:
+  app-network:
+    driver: bridge
