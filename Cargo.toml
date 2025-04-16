@@ -4,14 +4,28 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Core
+mimalloc = "0.1.46"
 tokio = { version = "1.44.1", features = ["full"] }
 
+# Server
 hyper = { version = "1.6.0", features = ["full"] }
-http-body-util = "0.1.3" # for collect() all fragments of the request body
 hyper-util = { version = "0.1.11", features = ["full"] } # for TokioIo
+http-body-util = "0.1.3" # for collect() all fragments of the request body
 
+# Database
 bb8-postgres = "0.9.0"
 
-serde_json = "1.0.140"
-serde = { version = "1.0.219", features = ["derive"] }
+# Utils
 dotenvy = "0.15.7"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+
+[profile.release]
+codegen-units = 1
+# Optimize for performance. Analyze the all code and optimize for speed.
+lto = "fat"
+# Optimize for performance. Abort when a panic occurs.
+panic = "abort"
+# Optimize for size. Delete debug info and symbols.
+strip = "symbols"

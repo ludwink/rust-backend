@@ -1,0 +1,3 @@
+# Recommended if the binary is only used for one target
+# This will make the binary use the CPU features of the host machine
+rustflags = ["-C", "target-cpu=native"]

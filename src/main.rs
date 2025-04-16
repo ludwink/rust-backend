@@ -37,6 +37,20 @@ mod router;
 use db::init_pool;
 use router::process_request_and_response;
 
+/// Global memory allocator configuration.
+///
+/// Uses the MiMalloc allocator instead of the default Rust allocator.
+/// MiMalloc is a general-purpose allocator with excellent performance characteristics:
+/// - Optimized for multi-threaded applications
+/// - Low memory overhead
+/// - Efficient handling of small allocations
+/// - Reduced memory fragmentation
+///
+/// This improves overall server performance, especially under high load conditions
+/// where memory allocation patterns can become a bottleneck.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 /// Main entry point of the application.
 ///
 /// Sets up an asynchronous HTTP server using Tokio and Hyper, then handles incoming
